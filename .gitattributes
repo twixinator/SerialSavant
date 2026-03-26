@@ -1,0 +1,36 @@
+# Normalize line endings to LF on commit, checkout as platform-native
+* text=auto
+
+# C# source files — always LF in repo
+*.cs    text diff=csharp eol=lf
+*.csproj text eol=lf
+*.sln   text eol=lf
+*.slnx  text eol=lf
+*.props text eol=lf
+*.targets text eol=lf
+
+# Markdown / docs
+*.md    text eol=lf
+
+# Shell scripts — LF only
+*.sh    text eol=lf
+
+# Windows batch files — CRLF only
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# JSON / YAML / config
+*.json  text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.toml  text eol=lf
+
+# Binary files — no conversion
+*.dll   binary
+*.exe   binary
+*.so    binary
+*.dylib binary
+*.png   binary
+*.jpg   binary
+*.gguf  binary
+*.ggml  binary

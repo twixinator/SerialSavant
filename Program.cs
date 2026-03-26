@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 raivolld
+// SPDX-License-Identifier: Apache-2.0
+
 // SerialSavant - UART Log Analyzer with Local LLM
 // Run: dotnet run
 // Publish (AOT): dotnet publish -r win-x64 -c Release

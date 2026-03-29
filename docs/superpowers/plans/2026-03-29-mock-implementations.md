@@ -78,7 +78,7 @@ Expected: Build succeeds. `dotnet test` runs with 0 tests, exit code 0.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add tests/ SerialSavant.sln
+git add -A tests/ SerialSavant.sln
 git commit -m "chore: scaffold xUnit test project with AwesomeAssertions
 
 Closes #6"
@@ -162,8 +162,8 @@ Expected: Build succeeds with no errors.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Infrastructure/
-git rm src/Infrastructure/Placeholder.cs
+git add -u src/Infrastructure/
+git add src/Infrastructure/MockMode.cs src/Infrastructure/MockSerialReader.cs
 git commit -m "feat(infra): add MockMode enum and MockSerialReader skeleton"
 ```
 
@@ -203,7 +203,7 @@ public sealed class MockSerialReaderTests
         }
 
         entries.Should().NotBeEmpty();
-        entries.Should().HaveCountGreaterThanOrEqualTo(9);
+        entries.Should().HaveCount(10);
     }
 
     [Fact]
@@ -371,7 +371,7 @@ Append these tests to `tests/SerialSavant.Tests/MockSerialReaderTests.cs`:
             delay: delay,
             random: new Random(42));
 
-        using var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         var count = 0;
 
@@ -380,7 +380,6 @@ Append these tests to `tests/SerialSavant.Tests/MockSerialReaderTests.cs`:
             count++;
             if (count >= 3)
             {
-                cts.Cancel();
                 break;
             }
         }
@@ -636,7 +635,9 @@ public sealed class MockLlmAnalyzerTests
         var result1 = await _analyzer.AnalyzeAsync(entry);
         var result2 = await _analyzer.AnalyzeAsync(entry);
 
-        result1.Should().Be(result2);
+        result1.Explanation.Should().Be(result2.Explanation);
+        result1.Severity.Should().Be(result2.Severity);
+        result1.Suggestions.Should().BeEquivalentTo(result2.Suggestions);
     }
 
     [Theory]
@@ -842,7 +843,8 @@ Expected: Build clean, all tests green.
 
 ```bash
 cd /home/oliverraider/Projects/Open-Source/SerialSavant
-dotnet publish -c Release --no-restore 2>&1 | grep -i "warning IL"
+dotnet restore
+dotnet publish SerialSavant.csproj -c Release 2>&1 | grep -i "warning IL"
 ```
 
 Expected: No IL2026/IL3050 warnings from Infrastructure project files.
@@ -851,13 +853,13 @@ Expected: No IL2026/IL3050 warnings from Infrastructure project files.
 
 ```bash
 cd /home/oliverraider/Projects/Open-Source/SerialSavant
-dotnet format
 dotnet format --verify-no-changes
 ```
 
-If format changes files, commit them:
+If the check fails (formatting needed), run `dotnet format` and commit:
 
 ```bash
+dotnet format
 git add -u
 git commit -m "style: apply dotnet format"
 ```

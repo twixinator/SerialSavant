@@ -11,8 +11,10 @@ public sealed class MockLlmAnalyzerTests
 {
     private readonly MockLlmAnalyzer _analyzer = new();
 
+    private static readonly DateTimeOffset TestTimestamp = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
     private static LogEntry MakeEntry(string rawLine) =>
-        new(DateTimeOffset.UtcNow, rawLine, SerialLogLevel.Unknown);
+        new(TestTimestamp, rawLine, SerialLogLevel.Unknown);
 
     [Theory]
     [InlineData("0x00 0x1A 0x2F 0x00 0xFF 0xDE 0xAD")]
@@ -20,7 +22,7 @@ public sealed class MockLlmAnalyzerTests
     [InlineData("0x7F 0x45 0x4C 0x46 0x02 0x01 0x01")]
     public async Task AnalyzeAsync_HexDumpInput_ReturnsLowSeverity(string rawLine)
     {
-        var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine));
+        var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine), TestContext.Current.CancellationToken);
 
         result.Severity.Should().Be(Severity.Low);
     }
@@ -33,7 +35,7 @@ public sealed class MockLlmAnalyzerTests
     public async Task AnalyzeAsync_ErrnoInput_ReturnsHighOrCriticalSeverity(
         string rawLine, Severity expectedSeverity)
     {
-        var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine));
+        var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine), TestContext.Current.CancellationToken);
 
         result.Severity.Should().Be(expectedSeverity);
     }
@@ -43,7 +45,7 @@ public sealed class MockLlmAnalyzerTests
     [InlineData("#1 0x0800EF01 in init_hardware() at hal.c:87")]
     public async Task AnalyzeAsync_StackTraceInput_ReturnsHighSeverity(string rawLine)
     {
-        var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine));
+        var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine), TestContext.Current.CancellationToken);
 
         result.Severity.Should().Be(Severity.High);
     }
@@ -54,7 +56,7 @@ public sealed class MockLlmAnalyzerTests
     [InlineData("")]
     public async Task AnalyzeAsync_UnknownInput_ReturnsMediumSeverity(string rawLine)
     {
-        var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine));
+        var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine), TestContext.Current.CancellationToken);
 
         result.Severity.Should().Be(Severity.Medium);
     }
@@ -64,8 +66,8 @@ public sealed class MockLlmAnalyzerTests
     {
         var entry = MakeEntry("ERROR: ENOMEM - Cannot allocate memory");
 
-        var result1 = await _analyzer.AnalyzeAsync(entry);
-        var result2 = await _analyzer.AnalyzeAsync(entry);
+        var result1 = await _analyzer.AnalyzeAsync(entry, TestContext.Current.CancellationToken);
+        var result2 = await _analyzer.AnalyzeAsync(entry, TestContext.Current.CancellationToken);
 
         result1.Explanation.Should().Be(result2.Explanation);
         result1.Severity.Should().Be(result2.Severity);
@@ -79,7 +81,7 @@ public sealed class MockLlmAnalyzerTests
     [InlineData("Some random log message")]
     public async Task AnalyzeAsync_ReturnsNonEmptyExplanationAndSuggestions(string rawLine)
     {
-        var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine));
+        var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine), TestContext.Current.CancellationToken);
 
         result.Explanation.Should().NotBeNullOrWhiteSpace();
         result.Suggestions.Should().NotBeEmpty();

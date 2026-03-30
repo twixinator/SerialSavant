@@ -15,7 +15,7 @@ public sealed class MockSerialReaderTests
         await using var reader = new MockSerialReader(MockMode.Deterministic);
 
         var entries = new List<LogEntry>();
-        await foreach (var entry in reader.ReadAsync())
+        await foreach (var entry in reader.ReadAsync(TestContext.Current.CancellationToken))
         {
             entries.Add(entry);
         }
@@ -30,7 +30,7 @@ public sealed class MockSerialReaderTests
         await using var reader = new MockSerialReader(MockMode.Deterministic);
 
         var entries = new List<LogEntry>();
-        await foreach (var entry in reader.ReadAsync())
+        await foreach (var entry in reader.ReadAsync(TestContext.Current.CancellationToken))
         {
             entries.Add(entry);
         }
@@ -109,17 +109,20 @@ public sealed class MockSerialReaderTests
         using var cts = new CancellationTokenSource();
         var count = 0;
 
-        await foreach (var _ in reader.ReadAsync(cts.Token))
+        var act = async () =>
         {
-            count++;
-            if (count >= 5)
+            await foreach (var _ in reader.ReadAsync(cts.Token))
             {
-                cts.Cancel();
-                break;
+                count++;
+                if (count >= 5)
+                {
+                    cts.Cancel();
+                }
             }
-        }
+        };
 
-        count.Should().Be(5);
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        count.Should().BeGreaterThanOrEqualTo(5);
     }
 
     [Fact]

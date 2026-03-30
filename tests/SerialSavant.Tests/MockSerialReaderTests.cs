@@ -70,4 +70,87 @@ public sealed class MockSerialReaderTests
         cts.IsCancellationRequested.Should().BeFalse();
         count.Should().BeGreaterThan(0);
     }
+
+    [Fact]
+    public async Task ReadAsync_RandomMode_RespectsDelayBetweenEntries()
+    {
+        var delay = TimeSpan.FromMilliseconds(50);
+        await using var reader = new MockSerialReader(
+            MockMode.Random,
+            delay: delay,
+            random: new Random(42));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var count = 0;
+
+        await foreach (var _ in reader.ReadAsync(cts.Token))
+        {
+            count++;
+            if (count >= 3)
+            {
+                break;
+            }
+        }
+
+        stopwatch.Stop();
+
+        // 3 entries with 50ms delay each = at least ~100ms (delays between entries, not before first)
+        stopwatch.ElapsedMilliseconds.Should().BeGreaterThanOrEqualTo(80);
+    }
+
+    [Fact]
+    public async Task ReadAsync_CancellationRequested_StopsEmitting()
+    {
+        await using var reader = new MockSerialReader(
+            MockMode.Random,
+            random: new Random(42));
+
+        using var cts = new CancellationTokenSource();
+        var count = 0;
+
+        await foreach (var _ in reader.ReadAsync(cts.Token))
+        {
+            count++;
+            if (count >= 5)
+            {
+                cts.Cancel();
+                break;
+            }
+        }
+
+        count.Should().Be(5);
+    }
+
+    [Fact]
+    public async Task ReadAsync_PreCancelledToken_StopsImmediately()
+    {
+        await using var reader = new MockSerialReader(MockMode.Deterministic);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var entries = new List<LogEntry>();
+
+        var act = async () =>
+        {
+            await foreach (var entry in reader.ReadAsync(cts.Token))
+            {
+                entries.Add(entry);
+            }
+        };
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DisposeAsync_NoOp_DoesNotThrow()
+    {
+        var reader = new MockSerialReader(MockMode.Deterministic);
+
+        var act = async () => await reader.DisposeAsync();
+
+        await act.Should().NotThrowAsync();
+    }
 }

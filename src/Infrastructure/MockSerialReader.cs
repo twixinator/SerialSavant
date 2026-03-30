@@ -52,9 +52,78 @@ public sealed class MockSerialReader(
         }
         else
         {
-            // Random mode — implemented in Task 4
-            await Task.CompletedTask.ConfigureAwait(false);
-            yield break;
+            var hexTemplates = new[]
+            {
+                "0x{0:X2} 0x{1:X2} 0x{2:X2} 0x{3:X2} 0x{4:X2} 0x{5:X2}",
+                "0x{0:X2} 0x{1:X2} 0x{2:X2} 0x{3:X2}",
+            };
+
+            var errnoTemplates = new[]
+            {
+                ("ERROR: ENOMEM - Cannot allocate memory (requested {0} bytes)", SerialLogLevel.Error),
+                ("ERROR: EACCES - Permission denied for resource {0}", SerialLogLevel.Error),
+                ("ERROR: ETIMEDOUT - Connection timed out after {0}ms", SerialLogLevel.Error),
+                ("FATAL: SIGSEGV - Segmentation fault at 0x{0:X8}", SerialLogLevel.Fatal),
+                ("FATAL: SIGBUS - Bus error at 0x{0:X8}", SerialLogLevel.Fatal),
+            };
+
+            var stackTemplates = new[]
+            {
+                "#0 0x{0:X8} in {1}() at {2}:{3}",
+                "#1 0x{0:X8} in {1}() at {2}:{3}",
+            };
+
+            var functionNames = new[] { "main", "init_hardware", "read_sensor", "write_flash", "reset_handler" };
+            var fileNames = new[] { "firmware.c", "hal.c", "sensor.c", "flash.c", "startup.s" };
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var category = _random.Next(3);
+                string rawLine;
+                SerialLogLevel level;
+
+                switch (category)
+                {
+                    case 0: // Hex dump
+                    {
+                        var template = hexTemplates[_random.Next(hexTemplates.Length)];
+                        var byteCount = template.Count(c => c == '{');
+                        var args = Enumerable.Range(0, byteCount)
+                            .Select(_ => (object)_random.Next(256)).ToArray();
+                        rawLine = string.Format(template, args);
+                        level = SerialLogLevel.Debug;
+                        break;
+                    }
+                    case 1: // Errno
+                    {
+                        var (template, errLevel) = errnoTemplates[_random.Next(errnoTemplates.Length)];
+                        rawLine = string.Format(template, _random.Next(1, 65536));
+                        level = errLevel;
+                        break;
+                    }
+                    default: // Stack trace
+                    {
+                        var template = stackTemplates[_random.Next(stackTemplates.Length)];
+                        rawLine = string.Format(
+                            template,
+                            _random.Next(0x08000000, 0x08FFFFFF),
+                            functionNames[_random.Next(functionNames.Length)],
+                            fileNames[_random.Next(fileNames.Length)],
+                            _random.Next(1, 500));
+                        level = SerialLogLevel.Error;
+                        break;
+                    }
+                }
+
+                yield return new LogEntry(_timeProvider.GetUtcNow(), rawLine, level);
+
+                if (_delay is { } d)
+                {
+                    await Task.Delay(d, cancellationToken).ConfigureAwait(false);
+                }
+            }
         }
     }
 

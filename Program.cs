@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 raivolld
+// SPDX-FileCopyrightText: 2026 Oliver Raider
 // SPDX-License-Identifier: Apache-2.0
 
 // SerialSavant - UART Log Analyzer with Local LLM

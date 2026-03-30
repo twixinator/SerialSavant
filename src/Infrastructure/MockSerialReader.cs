@@ -87,34 +87,34 @@ public sealed class MockSerialReader(
                 switch (category)
                 {
                     case 0: // Hex dump
-                    {
-                        var template = hexTemplates[_random.Next(hexTemplates.Length)];
-                        var byteCount = template.Count(c => c == '{');
-                        var args = Enumerable.Range(0, byteCount)
-                            .Select(_ => (object)_random.Next(256)).ToArray();
-                        rawLine = string.Format(template, args);
-                        level = SerialLogLevel.Debug;
-                        break;
-                    }
+                        {
+                            var template = hexTemplates[_random.Next(hexTemplates.Length)];
+                            var byteCount = template.Count(c => c == '{');
+                            var args = Enumerable.Range(0, byteCount)
+                                .Select(_ => (object)_random.Next(256)).ToArray();
+                            rawLine = string.Format(template, args);
+                            level = SerialLogLevel.Debug;
+                            break;
+                        }
                     case 1: // Errno
-                    {
-                        var (template, errLevel) = errnoTemplates[_random.Next(errnoTemplates.Length)];
-                        rawLine = string.Format(template, _random.Next(1, 65536));
-                        level = errLevel;
-                        break;
-                    }
+                        {
+                            var (template, errLevel) = errnoTemplates[_random.Next(errnoTemplates.Length)];
+                            rawLine = string.Format(template, _random.Next(1, 65536));
+                            level = errLevel;
+                            break;
+                        }
                     default: // Stack trace
-                    {
-                        var template = stackTemplates[_random.Next(stackTemplates.Length)];
-                        rawLine = string.Format(
-                            template,
-                            _random.Next(0x08000000, 0x08FFFFFF),
-                            functionNames[_random.Next(functionNames.Length)],
-                            fileNames[_random.Next(fileNames.Length)],
-                            _random.Next(1, 500));
-                        level = SerialLogLevel.Error;
-                        break;
-                    }
+                        {
+                            var template = stackTemplates[_random.Next(stackTemplates.Length)];
+                            rawLine = string.Format(
+                                template,
+                                _random.Next(0x08000000, 0x08FFFFFF),
+                                functionNames[_random.Next(functionNames.Length)],
+                                fileNames[_random.Next(fileNames.Length)],
+                                _random.Next(1, 500));
+                            level = SerialLogLevel.Error;
+                            break;
+                        }
                 }
 
                 yield return new LogEntry(_timeProvider.GetUtcNow(), rawLine, level);

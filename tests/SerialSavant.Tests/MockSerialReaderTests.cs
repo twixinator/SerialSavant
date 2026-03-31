@@ -184,4 +184,57 @@ public sealed class MockSerialReaderTests
 
         await act.Should().NotThrowAsync();
     }
+
+    [Fact]
+    public async Task ReadAsync_DeterministicMode_TimestampUsesInjectedTimeProvider()
+    {
+        var fixedTime = new DateTimeOffset(2030, 6, 15, 12, 0, 0, TimeSpan.Zero);
+        await using var reader = new MockSerialReader(MockMode.Deterministic, timeProvider: new FixedTimeProvider(fixedTime));
+
+        var entries = new List<LogEntry>();
+        await foreach (var entry in reader.ReadAsync(TestContext.Current.CancellationToken))
+        {
+            entries.Add(entry);
+        }
+
+        entries.Should().AllSatisfy(e => e.Timestamp.Should().Be(fixedTime));
+    }
+
+    [Fact]
+    public async Task ReadAsync_RandomMode_ProducesAllThreeCategories()
+    {
+        // Seed 42 with 50 iterations produces at least one entry of each
+        // category (hex dump, errno, stack trace) deterministically.
+        await using var reader = new MockSerialReader(MockMode.Random, random: new Random(42));
+        using var cts = new CancellationTokenSource();
+
+        var rawLines = new List<string>();
+        try
+        {
+            await foreach (var entry in reader.ReadAsync(cts.Token))
+            {
+                rawLines.Add(entry.RawLine);
+                if (rawLines.Count >= 50)
+                    cts.Cancel();
+            }
+        }
+        catch (OperationCanceledException) { /* expected termination */ }
+
+        rawLines.Should().Contain(line => line.StartsWith("0x", StringComparison.Ordinal),
+            "at least one hex dump entry must be produced");
+        rawLines.Should().Contain(line =>
+            line.Contains("ENOMEM", StringComparison.Ordinal) ||
+            line.Contains("EACCES", StringComparison.Ordinal) ||
+            line.Contains("ETIMEDOUT", StringComparison.Ordinal) ||
+            line.Contains("SIGSEGV", StringComparison.Ordinal) ||
+            line.Contains("SIGBUS", StringComparison.Ordinal),
+            "at least one errno/signal entry must be produced");
+        rawLines.Should().Contain(line => line.StartsWith("#", StringComparison.Ordinal),
+            "at least one stack trace frame must be produced");
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
+    }
 }

@@ -59,9 +59,9 @@ public sealed class MockLlmAnalyzerTests
     [Fact]
     public async Task AnalyzeAsync_CriticalErrnoAndStackTraceAndHexOverlap_ErrnoWins()
     {
-        // Line matches ContainsErrno (SIGSEGV → Critical), StackTracePattern, and HexDumpPattern.
-        // Errno check runs first; result must be Critical regardless of other matches.
-        var rawLine = "FATAL: SIGSEGV - #0 0xAB 0xCD in main() at firmware.c:1";
+        // Line matches ContainsErrno (SIGSEGV → Critical), StackTracePattern (#0 0xABCD in main()),
+        // and HexDumpPattern (0xAB 0xCD). Errno check runs first; result must be Critical.
+        var rawLine = "FATAL: SIGSEGV - #0 0xABCD in main() at firmware.c:1, data: 0xAB 0xCD";
 
         var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine), TestContext.Current.CancellationToken);
 

@@ -32,6 +32,7 @@ public sealed class MockLlmAnalyzerTests
     [InlineData("ERROR: EACCES - Permission denied", Severity.High)]
     [InlineData("FATAL: SIGSEGV - Segmentation fault at 0x00000010", Severity.Critical)]
     [InlineData("FATAL: SIGBUS - Bus error at 0x0000DEAD", Severity.Critical)]
+    [InlineData("FATAL: SIGABRT - Abort signal from firmware assert()", Severity.Critical)]
     public async Task AnalyzeAsync_ErrnoInput_ReturnsHighOrCriticalSeverity(
         string rawLine, Severity expectedSeverity)
     {

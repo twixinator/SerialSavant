@@ -8,8 +8,13 @@ namespace SerialSavant.Infrastructure;
 
 public sealed partial class MockLlmAnalyzer : ILlmAnalyzer
 {
-    private static readonly string[] CriticalSignals = ["SIGSEGV", "SIGBUS"];
+    // Signals that map to Severity.Critical. All other entries in ErrnoNames
+    // (POSIX errno codes and non-critical signals) map to Severity.High.
+    private static readonly string[] CriticalSignals = ["SIGSEGV", "SIGBUS", "SIGABRT"];
 
+    // POSIX errno codes (ENOMEM, EACCES, ETIMEDOUT, EINVAL, ENOENT) and
+    // fatal signals (SIGSEGV, SIGBUS, SIGABRT). Signals in CriticalSignals
+    // above map to Severity.Critical; all others map to Severity.High.
     private static readonly string[] ErrnoNames =
         ["ENOMEM", "EACCES", "ETIMEDOUT", "EINVAL", "ENOENT", "SIGSEGV", "SIGBUS", "SIGABRT"];
 

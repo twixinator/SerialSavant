@@ -36,34 +36,34 @@ public sealed partial class MockLlmAnalyzer : ILlmAnalyzer
             var isCritical = CriticalSignals.Any(s =>
                 errnoName.Contains(s, StringComparison.Ordinal));
 
-            return new AnalysisResult(
-                Explanation: $"POSIX error detected: {errnoName}. This indicates a system-level failure that may require immediate attention.",
-                Severity: isCritical ? Severity.Critical : Severity.High,
-                Suggestions: isCritical
+            return AnalysisResult.Create(
+                explanation: $"POSIX error detected: {errnoName}. This indicates a system-level failure that may require immediate attention.",
+                severity: isCritical ? Severity.Critical : Severity.High,
+                suggestions: isCritical
                     ? ["Inspect pointer validity", "Check for stack overflow", "Review memory map"]
                     : ["Check memory allocation", "Verify resource permissions", "Review system limits"]);
         }
 
         if (StackTracePattern().IsMatch(rawLine))
         {
-            return new AnalysisResult(
-                Explanation: "Stack trace frame detected. This indicates a crash or exception in the firmware execution path.",
-                Severity: Severity.High,
-                Suggestions: ["Check stack depth", "Review function at crash point", "Inspect call chain for recursion"]);
+            return AnalysisResult.Create(
+                explanation: "Stack trace frame detected. This indicates a crash or exception in the firmware execution path.",
+                severity: Severity.High,
+                suggestions: ["Check stack depth", "Review function at crash point", "Inspect call chain for recursion"]);
         }
 
         if (HexDumpPattern().IsMatch(rawLine))
         {
-            return new AnalysisResult(
-                Explanation: "Hex dump detected. Raw byte data from device memory or communication buffer.",
-                Severity: Severity.Low,
-                Suggestions: ["Check byte alignment", "Verify endianness"]);
+            return AnalysisResult.Create(
+                explanation: "Hex dump detected. Raw byte data from device memory or communication buffer.",
+                severity: Severity.Low,
+                suggestions: ["Check byte alignment", "Verify endianness"]);
         }
 
-        return new AnalysisResult(
-            Explanation: "Unrecognized log entry. Unable to determine specific pattern.",
-            Severity: Severity.Medium,
-            Suggestions: ["Review log context"]);
+        return AnalysisResult.Create(
+            explanation: "Unrecognized log entry. Unable to determine specific pattern.",
+            severity: Severity.Medium,
+            suggestions: ["Review log context"]);
     }
 
     private static bool ContainsErrno(string rawLine, out string errnoName)

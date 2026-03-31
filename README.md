@@ -2,7 +2,7 @@
 
 **Local-AI powered serial log analyzer for embedded developers.**
 
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
+[![CI](https://github.com/twixinator/SerialSavant/actions/workflows/ci.yml/badge.svg)](https://github.com/twixinator/SerialSavant/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10-purple)

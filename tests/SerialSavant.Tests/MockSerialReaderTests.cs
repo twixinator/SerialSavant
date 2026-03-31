@@ -46,11 +46,36 @@ public sealed class MockSerialReaderTests
             line.Contains("SIGSEGV", StringComparison.Ordinal) ||
             line.Contains("EACCES", StringComparison.Ordinal));
 
-        // Stack trace: contains frame markers
+        // Stack trace: frame entries start with '#' followed by a frame number
         rawLines.Should().Contain(line =>
             line.Contains("#0", StringComparison.Ordinal) ||
-            line.Contains("#1", StringComparison.Ordinal) ||
-            line.Contains("at 0x", StringComparison.Ordinal));
+            line.Contains("#1", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ReadAsync_DeterministicMode_LogLevelsMatchExpectedSequence()
+    {
+        await using var reader = new MockSerialReader(MockMode.Deterministic);
+
+        var entries = new List<LogEntry>();
+        await foreach (var entry in reader.ReadAsync(TestContext.Current.CancellationToken))
+        {
+            entries.Add(entry);
+        }
+
+        var levels = entries.Select(e => e.LogLevel).ToList();
+        levels.Should().ContainInOrder(
+            SerialLogLevel.Debug,   // hex dump 1
+            SerialLogLevel.Debug,   // hex dump 2
+            SerialLogLevel.Info,    // hex dump 3 (ELF header)
+            SerialLogLevel.Error,   // ENOMEM
+            SerialLogLevel.Error,   // EACCES
+            SerialLogLevel.Fatal,   // SIGSEGV
+            SerialLogLevel.Fatal,   // SIGBUS
+            SerialLogLevel.Error,   // stack frame #0
+            SerialLogLevel.Error,   // stack frame #1
+            SerialLogLevel.Warning  // stack frame #2
+        );
     }
 
     [Fact]
@@ -95,8 +120,11 @@ public sealed class MockSerialReaderTests
 
         stopwatch.Stop();
 
-        // 3 entries with 50ms delay each = at least ~100ms (delays between entries, not before first)
-        stopwatch.ElapsedMilliseconds.Should().BeGreaterThanOrEqualTo(80);
+        // Delay fires after each yield. For 3 entries consumed before break:
+        // delay after entry 1, delay after entry 2, break before delay after entry 3
+        // → 2 × 50ms = ~100ms minimum.
+        // Threshold is conservative to absorb CI scheduling jitter.
+        stopwatch.ElapsedMilliseconds.Should().BeGreaterThanOrEqualTo(90);
     }
 
     [Fact]

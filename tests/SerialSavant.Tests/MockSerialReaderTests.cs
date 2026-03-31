@@ -218,7 +218,10 @@ public sealed class MockSerialReaderTests
                     cts.Cancel();
             }
         }
-        catch (OperationCanceledException) { /* expected termination */ }
+        catch (OperationCanceledException ex)
+        {
+            ex.CancellationToken.Should().Be(cts.Token);
+        }
 
         rawLines.Should().Contain(line => line.StartsWith("0x", StringComparison.Ordinal),
             "at least one hex dump entry must be produced");

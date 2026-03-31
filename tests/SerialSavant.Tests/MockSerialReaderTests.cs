@@ -120,9 +120,8 @@ public sealed class MockSerialReaderTests
 
         stopwatch.Stop();
 
-        // Delay fires after each yield. For 3 entries consumed before break:
-        // delay after entry 1, delay after entry 2, break before delay after entry 3
-        // → 2 × 50ms = ~100ms minimum.
+        // PeriodicTimer waits one full period before each tick, including the first.
+        // For 3 entries consumed before break: 3 × 50ms = ~150ms minimum.
         // Threshold is conservative to absorb CI scheduling jitter.
         stopwatch.ElapsedMilliseconds.Should().BeGreaterThanOrEqualTo(90);
     }
@@ -234,6 +233,14 @@ public sealed class MockSerialReaderTests
             "at least one errno/signal entry must be produced");
         rawLines.Should().Contain(line => line.StartsWith("#", StringComparison.Ordinal),
             "at least one stack trace frame must be produced");
+    }
+
+    [Fact]
+    public void Constructor_InvalidMockMode_ThrowsArgumentOutOfRangeException()
+    {
+        var act = () => new MockSerialReader((MockMode)99);
+
+        act.Should().Throw<ArgumentOutOfRangeException>().WithParameterName("mode");
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider

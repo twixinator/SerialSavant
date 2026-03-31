@@ -30,6 +30,9 @@ public sealed class MockLlmAnalyzerTests
     [Theory]
     [InlineData("ERROR: ENOMEM - Cannot allocate memory", Severity.High)]
     [InlineData("ERROR: EACCES - Permission denied", Severity.High)]
+    [InlineData("ERROR: ETIMEDOUT - Connection timed out after 5000ms", Severity.High)]
+    [InlineData("ERROR: EINVAL - Invalid argument passed to read()", Severity.High)]
+    [InlineData("ERROR: ENOENT - No such file or directory: /dev/cfg", Severity.High)]
     [InlineData("FATAL: SIGSEGV - Segmentation fault at 0x00000010", Severity.Critical)]
     [InlineData("FATAL: SIGBUS - Bus error at 0x0000DEAD", Severity.Critical)]
     [InlineData("FATAL: SIGABRT - Abort signal from firmware assert()", Severity.Critical)]
@@ -39,6 +42,42 @@ public sealed class MockLlmAnalyzerTests
         var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine), TestContext.Current.CancellationToken);
 
         result.Severity.Should().Be(expectedSeverity);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_ErrnoAndHexOverlap_ErrnoWins()
+    {
+        // Line matches both ContainsErrno (ENOMEM) and HexDumpPattern (0x00 0x1A 0x2F).
+        // Errno check runs first in Classify, so result must be High (not Low).
+        var rawLine = "ERROR: ENOMEM - dump: 0x00 0x1A 0x2F";
+
+        var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine), TestContext.Current.CancellationToken);
+
+        result.Severity.Should().Be(Severity.High);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_CriticalErrnoAndStackTraceAndHexOverlap_ErrnoWins()
+    {
+        // Line matches ContainsErrno (SIGSEGV → Critical), StackTracePattern, and HexDumpPattern.
+        // Errno check runs first; result must be Critical regardless of other matches.
+        var rawLine = "FATAL: SIGSEGV - #0 0xAB 0xCD in main() at firmware.c:1";
+
+        var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine), TestContext.Current.CancellationToken);
+
+        result.Severity.Should().Be(Severity.Critical);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_StackTraceAndHexOverlap_StackTraceWins()
+    {
+        // Line matches StackTracePattern (#0 0xDEAD in ...) AND HexDumpPattern (0xAB 0xCD).
+        // Stack trace check runs before hex dump; result must be High (not Low).
+        var rawLine = "#0 0xDEAD in crash_handler() at reset.c:5, data: 0xAB 0xCD";
+
+        var result = await _analyzer.AnalyzeAsync(MakeEntry(rawLine), TestContext.Current.CancellationToken);
+
+        result.Severity.Should().Be(Severity.High);
     }
 
     [Theory]

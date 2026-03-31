@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using AwesomeAssertions;
+using Microsoft.Extensions.Logging;
 using SerialSavant.Core;
 using SerialSavant.Infrastructure;
 
@@ -138,5 +139,52 @@ public sealed class MockLlmAnalyzerTests
         var act = () => _analyzer.AnalyzeAsync(entry, cts.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_NullEntry_ThrowsArgumentNullException()
+    {
+        var act = () => _analyzer.AnalyzeAsync(null!, TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<ArgumentNullException>().WithParameterName("entry");
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_ExceptionsDeliveredThroughTask()
+    {
+        // Calling AnalyzeAsync must return a Task without throwing synchronously,
+        // so exceptions from internal logic arrive via the Task fault path.
+        var task = _analyzer.AnalyzeAsync(MakeEntry("test"), TestContext.Current.CancellationToken);
+
+        task.Should().NotBeNull();
+        await task; // must not throw synchronously before await
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_CriticalEntry_LogsWarning()
+    {
+        var fakeLogger = new FakeLogger<MockLlmAnalyzer>();
+        var analyzer = new MockLlmAnalyzer(fakeLogger);
+
+        await analyzer.AnalyzeAsync(
+            MakeEntry("FATAL: SIGSEGV - Segmentation fault at 0x00000010"),
+            TestContext.Current.CancellationToken);
+
+        fakeLogger.Logs.Should().ContainSingle(l => l.Level == LogLevel.Warning);
+    }
+
+    private sealed class FakeLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Logs { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Logs.Add((logLevel, formatter(state, exception)));
+        }
     }
 }

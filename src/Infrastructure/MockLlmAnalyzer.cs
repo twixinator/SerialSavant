@@ -1,13 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Oliver Raider
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.RegularExpressions;
 using SerialSavant.Core;
 
 namespace SerialSavant.Infrastructure;
 
-public sealed partial class MockLlmAnalyzer : ILlmAnalyzer
+public sealed partial class MockLlmAnalyzer(ILogger<MockLlmAnalyzer>? logger = null) : ILlmAnalyzer
 {
+    private readonly ILogger<MockLlmAnalyzer> _logger = logger ?? NullLogger<MockLlmAnalyzer>.Instance;
+
     // Signals that map to Severity.Critical. All other entries in ErrnoNames
     // (POSIX errno codes and non-critical signals) map to Severity.High.
     private static readonly string[] CriticalSignals = ["SIGSEGV", "SIGBUS", "SIGABRT"];
@@ -18,15 +22,25 @@ public sealed partial class MockLlmAnalyzer : ILlmAnalyzer
     private static readonly string[] ErrnoNames =
         ["ENOMEM", "EACCES", "ETIMEDOUT", "EINVAL", "ENOENT", "SIGSEGV", "SIGBUS", "SIGABRT"];
 
-    public Task<AnalysisResult> AnalyzeAsync(
+    public async Task<AnalysisResult> AnalyzeAsync(
         LogEntry entry, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(entry);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var rawLine = entry.RawLine;
-        var result = Classify(rawLine);
+        // await Task.CompletedTask ensures all subsequent exceptions (including from Classify)
+        // are captured by the async state machine and delivered through the Task fault path,
+        // consistent with the async contract for callers using ContinueWith or task.Exception.
+        await Task.CompletedTask.ConfigureAwait(false);
 
-        return Task.FromResult(result);
+        var result = Classify(entry.RawLine);
+
+        if (result.Severity is Severity.Critical)
+        {
+            _logger.LogWarning("Critical severity detected in log entry: {RawLine}", entry.RawLine);
+        }
+
+        return result;
     }
 
     private static AnalysisResult Classify(string rawLine)

@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\SerialSavant.Core.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\SerialSavant.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\UI\SerialSavant.UI.csproj" />
   </ItemGroup>
 
 </Project>

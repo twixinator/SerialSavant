@@ -9,8 +9,8 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
-    <!-- Prevent SDK wildcard from compiling sub-project sources and obj/bin under src/ -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);src\**</DefaultItemExcludes>
+    <!-- Prevent SDK wildcard from compiling sub-project sources and obj/bin under src/ and tests/ -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);src\**;tests\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

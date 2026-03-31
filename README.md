@@ -185,4 +185,4 @@ Contributions are welcome. Before submitting a pull request, please review [`CLA
 
 Apache-2.0. See [`LICENSE`](LICENSE) for the full text.
 
-Copyright 2024 raivolld
+Copyright 2026 Oliver Raider

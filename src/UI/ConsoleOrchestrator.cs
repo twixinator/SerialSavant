@@ -49,7 +49,7 @@ public sealed class ConsoleOrchestrator(
         {
             await _executeTask.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException oce) when (oce.CancellationToken == cancellationToken)
         {
             // Expected when the host stop timeout fires before ExecuteAsync finishes.
         }
@@ -98,6 +98,7 @@ public sealed class ConsoleOrchestrator(
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled error in session after {Count} entries", count);
+            Environment.ExitCode = 1;
         }
         finally
         {

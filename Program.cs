@@ -18,6 +18,8 @@ using Spectre.Console;
 
 // ── 1. Parse --mock flag ──────────────────────────────────────────────────────
 
+const string APP_VERSION = "v0.1.0";
+
 var isMockFlagSet = args.Contains("--mock", StringComparer.OrdinalIgnoreCase);
 
 if (isMockFlagSet)
@@ -28,13 +30,14 @@ if (isMockFlagSet)
 
 // ── 2. Interactive menu (skipped in --mock mode) ──────────────────────────────
 
+// Collected for display; wiring to config is deferred to issue #9.
 string? menuPort = null;
 string? menuBaudRate = null;
 string? menuModelPath = null;
 
 if (!isMockFlagSet)
 {
-    AnsiConsole.MarkupLine("[bold]SerialSavant[/] v0.1.0 — UART Log Analyzer with Local LLM");
+    AnsiConsole.MarkupLine($"[bold]SerialSavant[/] {APP_VERSION} — UART Log Analyzer with Local LLM");
     AnsiConsole.WriteLine();
 
     menuPort = AnsiConsole.Prompt(
@@ -82,7 +85,7 @@ builder.Services.AddSingleton<IValidateOptions<SerialConfig>, SerialConfigValida
 builder.Services.AddSingleton<IValidateOptions<LlmConfig>, LlmConfigValidator>();
 
 // DI registrations.
-builder.Services.AddSingleton(new MockOptions { IsMockFlagSet = isMockFlagSet });
+builder.Services.AddSingleton(new MockOptions { Mode = isMockFlagSet ? MockMode.Random : MockMode.Deterministic });
 builder.Services.AddSingleton<ILogRenderer, AnsiConsoleRenderer>();
 builder.Services.AddSingleton<ILlmAnalyzer, MockLlmAnalyzer>();
 
@@ -90,9 +93,8 @@ builder.Services.AddSingleton<ISerialReader>(sp =>
 {
     var opts = sp.GetRequiredService<MockOptions>();
     var log = sp.GetRequiredService<ILogger<MockSerialReader>>();
-    var mode = opts.IsMockFlagSet ? MockMode.Random : MockMode.Deterministic;
     const int MOCK_ENTRY_DELAY_MS = 100;
-    return new MockSerialReader(mode, delay: TimeSpan.FromMilliseconds(MOCK_ENTRY_DELAY_MS), logger: log);
+    return new MockSerialReader(opts.Mode, delay: TimeSpan.FromMilliseconds(MOCK_ENTRY_DELAY_MS), logger: log);
 });
 
 builder.Services.AddHostedService<ConsoleOrchestrator>();

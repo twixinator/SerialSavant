@@ -77,15 +77,50 @@ public sealed class ConsoleOrchestratorTests
     {
         var renderer = new FakeLogRenderer();
         var lifetime = new FakeApplicationLifetime();
+        var reader = new SignaledSerialReader();
 
-        var orchestrator = Build(new FakeSerialReader(InfiniteEntries()), new FakeAnalyzer(), renderer, lifetime);
+        var orchestrator = Build(reader, new FakeAnalyzer(), renderer, lifetime);
         await orchestrator.StartAsync(TestContext.Current.CancellationToken);
-        await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
+        await reader.WaitUntilStartedAsync(TestContext.Current.CancellationToken);
 
         var act = async () => await orchestrator.StopAsync(TestContext.Current.CancellationToken);
 
         await act.Should().NotThrowAsync();
         renderer.LastSummaryCount.Should().BeNull();  // cancelled — summary not rendered
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_StreamWithPartialAnalyzerFailures_RendersOnlySuccessfulEntries()
+    {
+        var entries = new[]
+        {
+            new LogEntry(DateTimeOffset.UtcNow, "bad-line", SerialLogLevel.Unknown),
+            new LogEntry(DateTimeOffset.UtcNow, "good-line", SerialLogLevel.Info),
+        };
+        var renderer = new FakeLogRenderer();
+        var lifetime = new FakeApplicationLifetime();
+
+        var orchestrator = Build(new FakeSerialReader(entries), new FailFirstAnalyzer(), renderer, lifetime);
+        await orchestrator.StartAsync(TestContext.Current.CancellationToken);
+        await lifetime.Stopped.WaitAsync(TestContext.Current.CancellationToken);
+
+        renderer.RenderedCount.Should().Be(1);
+        renderer.LastSummaryCount.Should().Be(1);
+        lifetime.StopWasCalled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ReaderThrowsIOException_LogsErrorAndStopsHost()
+    {
+        var renderer = new FakeLogRenderer();
+        var lifetime = new FakeApplicationLifetime();
+
+        var orchestrator = Build(new ThrowingSerialReader(), new FakeAnalyzer(), renderer, lifetime);
+        await orchestrator.StartAsync(TestContext.Current.CancellationToken);
+        await lifetime.Stopped.WaitAsync(TestContext.Current.CancellationToken);
+
+        renderer.RenderedCount.Should().Be(0);
+        lifetime.StopWasCalled.Should().BeTrue();
     }
 
     // -------------------------------------------------------------------------
@@ -152,6 +187,57 @@ public sealed class ConsoleOrchestratorTests
         public void RenderHeader() => HeaderWasCalled = true;
         public void Render(LogEntry entry, AnalysisResult result) => RenderedCount++;
         public void RenderSummary(int totalCount) => LastSummaryCount = totalCount;
+    }
+
+    private sealed class FailFirstAnalyzer : ILlmAnalyzer
+    {
+        private int _callCount;
+        private static readonly AnalysisResult Fixed = AnalysisResult.Create(
+            "fake explanation", Severity.Low, ["suggestion"]);
+
+        public Task<AnalysisResult> AnalyzeAsync(LogEntry entry, CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _callCount) == 1)
+                return Task.FromException<AnalysisResult>(new InvalidOperationException("simulated first-call fault"));
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Fixed);
+        }
+    }
+
+    private sealed class ThrowingSerialReader : ISerialReader
+    {
+        public async IAsyncEnumerable<LogEntry> ReadAsync(
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            throw new IOException("simulated read failure");
+#pragma warning disable CS0162 // unreachable — required to make this method an async iterator
+            yield break;
+#pragma warning restore CS0162
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class SignaledSerialReader : ISerialReader
+    {
+        private readonly SemaphoreSlim _started = new(0, 1);
+
+        public Task WaitUntilStartedAsync(CancellationToken ct) => _started.WaitAsync(ct);
+
+        public async IAsyncEnumerable<LogEntry> ReadAsync(
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            _started.Release();
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return new LogEntry(DateTimeOffset.UtcNow, "x", SerialLogLevel.Debug);
+                await Task.Yield();
+            }
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class FakeApplicationLifetime : IHostApplicationLifetime

@@ -74,7 +74,7 @@ public sealed class AppSettingsRepositoryTests
                        "Temperature": 0.5, "ServerPort": 8080, "TimeoutMs": 5000 }
             }
             """;
-        await File.WriteAllTextAsync(path, json);
+        await File.WriteAllTextAsync(path, json, TestContext.Current.CancellationToken);
 
         var repo = MakeRepository(path);
         var (settings, wasDefaulted) = await repo.LoadAsync(TestContext.Current.CancellationToken);
@@ -90,7 +90,7 @@ public sealed class AppSettingsRepositoryTests
     {
         var path = TempConfigPath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, "this is not json {{{{");
+        await File.WriteAllTextAsync(path, "this is not json {{{{", TestContext.Current.CancellationToken);
 
         var repo = MakeRepository(path);
         var (settings, wasDefaulted) = await repo.LoadAsync(TestContext.Current.CancellationToken);
@@ -106,7 +106,7 @@ public sealed class AppSettingsRepositoryTests
         // triggering the null-result guard in LoadAsync.
         var path = TempConfigPath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, "null");
+        await File.WriteAllTextAsync(path, "null", TestContext.Current.CancellationToken);
 
         var repo = MakeRepository(path);
         var (settings, wasDefaulted) = await repo.LoadAsync(TestContext.Current.CancellationToken);
@@ -120,7 +120,7 @@ public sealed class AppSettingsRepositoryTests
     {
         var path = TempConfigPath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, "{}");
+        await File.WriteAllTextAsync(path, "{}", TestContext.Current.CancellationToken);
 
         var repo = MakeRepository(path);
         using var cts = new CancellationTokenSource();
@@ -152,12 +152,12 @@ public sealed class AppSettingsRepositoryTests
     {
         var path = TempConfigPath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, "old content");
+        await File.WriteAllTextAsync(path, "old content", TestContext.Current.CancellationToken);
 
         var repo = MakeRepository(path);
         await repo.SaveAsync(AppSettings.CreateDefault(), TestContext.Current.CancellationToken);
 
-        var content = await File.ReadAllTextAsync(path);
+        var content = await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken);
         content.Should().NotBe("old content");
         content.Should().Contain("BaudRate");
     }

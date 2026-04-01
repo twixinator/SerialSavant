@@ -5,9 +5,12 @@ namespace SerialSavant.Config;
 
 public static class ConfigPaths
 {
-    public static string ConfigFilePath =>
+    private const string ConfigDirName = ".serialsavant";
+    private const string ConfigFileName = "config.json";
+
+    public static readonly string ConfigFilePath =
         Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".serialsavant",
-            "config.json");
+            ConfigDirName,
+            ConfigFileName);
 }

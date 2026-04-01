@@ -13,7 +13,7 @@ public sealed class AppSettingsRepositoryTests
     {
         var settings = AppSettings.CreateDefault();
 
-        settings.Serial.Port.Should().NotBeNullOrEmpty();
+        settings.Serial.Port.Should().NotBeNullOrWhiteSpace();
     }
 
     [Fact]

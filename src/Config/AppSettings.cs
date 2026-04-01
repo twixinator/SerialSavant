@@ -13,10 +13,14 @@ public sealed record AppSettings
     /// </summary>
     /// <remarks>
     /// <para><see cref="SerialConfig.Port"/> is <c>"COM1"</c> on Windows and
-    /// <c>"/dev/ttyUSB0"</c> on Linux/macOS.</para>
-    /// <para><see cref="LlmConfig.ModelPath"/> is intentionally empty — the UI
-    /// checks <c>WasDefaulted</c> and prompts the user to configure the model
-    /// path before the LLM subsystem is used.</para>
+    /// <c>"/dev/ttyUSB0"</c> on Linux/macOS. This factory is the only place the
+    /// platform split is applied; the <see cref="SerialConfig"/> property-level
+    /// default is always <c>"/dev/ttyUSB0"</c> and is intended for deserialization
+    /// fallback only.</para>
+    /// <para><see cref="LlmConfig.ModelPath"/> is intentionally empty. Callers that
+    /// receive <c>WasDefaulted = true</c> from
+    /// <see cref="AppSettingsRepository.LoadAsync"/> should prompt the user to
+    /// supply a model path before invoking the LLM subsystem.</para>
     /// </remarks>
     public static AppSettings CreateDefault() => new()
     {

@@ -130,6 +130,33 @@ public sealed class AppSettingsRepositoryTests
             .Should().ThrowAsync<OperationCanceledException>();
     }
 
+    [Fact]
+    public async Task LoadAsync_MissingFileInExistingDirectory_ReturnsDefaultsWithWasDefaultedTrue()
+    {
+        var path = TempConfigPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        // Directory exists but file does not — triggers FileNotFoundException
+
+        var repo = MakeRepository(path);
+        var (settings, wasDefaulted) = await repo.LoadAsync(TestContext.Current.CancellationToken);
+
+        wasDefaulted.Should().BeTrue();
+        settings.Serial.BaudRate.Should().Be(115200);
+    }
+
+    [Fact]
+    public async Task LoadAsync_IOException_Propagates()
+    {
+        var path = TempConfigPath();
+        // Create a directory at the file path — ReadAllTextAsync will fail (EISDIR/access denied)
+        Directory.CreateDirectory(path);
+
+        var repo = MakeRepository(path);
+        await repo.Invoking(r => r.LoadAsync(TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<Exception>()
+            .Where(e => e is IOException || e is UnauthorizedAccessException);
+    }
+
     // ── save tests ───────────────────────────────────────────────────────
 
     [Fact]
@@ -159,7 +186,7 @@ public sealed class AppSettingsRepositoryTests
 
         var content = await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken);
         content.Should().NotBe("old content");
-        content.Should().Contain("BaudRate");
+        content.Should().Contain("115200");
     }
 
     [Fact]
@@ -190,5 +217,28 @@ public sealed class AppSettingsRepositoryTests
 
         await repo.Invoking(r => r.SaveAsync(AppSettings.CreateDefault(), cts.Token))
             .Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task SaveAsync_NullSettings_ThrowsArgumentNullException()
+    {
+        var repo = MakeRepository(TempConfigPath());
+
+        await repo.Invoking(r => r.SaveAsync(null!, CancellationToken.None))
+            .Should().ThrowAsync<ArgumentNullException>()
+            .WithParameterName("settings");
+    }
+
+    [Fact]
+    public async Task SaveAsync_IoException_PropagatesException()
+    {
+        var path = TempConfigPath();
+        // Create a directory at the file path — WriteAllTextAsync will fail
+        Directory.CreateDirectory(path);
+
+        var repo = MakeRepository(path);
+        await repo.Invoking(r => r.SaveAsync(AppSettings.CreateDefault(), TestContext.Current.CancellationToken))
+            .Should().ThrowAsync<Exception>()
+            .Where(e => e is IOException || e is UnauthorizedAccessException);
     }
 }

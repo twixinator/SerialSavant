@@ -241,4 +241,71 @@ public sealed class AppSettingsRepositoryTests
             .Should().ThrowAsync<Exception>()
             .Where(e => e is IOException || e is UnauthorizedAccessException);
     }
+
+    // ── constructor tests ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void Constructor_NullLogger_ThrowsArgumentNullException()
+    {
+        var act = () => new AppSettingsRepository(null!, TempConfigPath());
+
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("logger");
+    }
+
+    [Fact]
+    public async Task LoadAsync_PartialJsonFile_MissingOptionalFieldsGetClrDefaults()
+    {
+        var path = TempConfigPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+        // STJ source-generated deserialization of records with init properties does not apply
+        // C# property initializer defaults for absent fields — missing numeric fields become 0.
+        const string json = """
+            {
+              "Serial": { "Port": "/dev/ttyACM0", "BaudRate": 9600 },
+              "Llm": { "ModelPath": "/models/llama.gguf" }
+            }
+            """;
+        await File.WriteAllTextAsync(path, json, TestContext.Current.CancellationToken);
+
+        var repo = MakeRepository(path);
+        var (settings, wasDefaulted) = await repo.LoadAsync(TestContext.Current.CancellationToken);
+
+        wasDefaulted.Should().BeFalse();
+        settings.Serial.Port.Should().Be("/dev/ttyACM0");
+        settings.Serial.BaudRate.Should().Be(9600);
+        settings.Serial.ReconnectBaseDelayMs.Should().Be(0);
+        settings.Serial.ReconnectMaxDelayMs.Should().Be(0);
+        settings.Serial.ReconnectMaxAttempts.Should().Be(0);
+        settings.Llm.ModelPath.Should().Be("/models/llama.gguf");
+        settings.Llm.MaxTokens.Should().Be(0);
+        settings.Llm.Temperature.Should().Be(0f);
+        settings.Llm.ServerPort.Should().Be(0);
+        settings.Llm.TimeoutMs.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task SaveAsync_RoundTrip_AllLlmFieldsPreserved()
+    {
+        var path = TempConfigPath();
+        var repo = MakeRepository(path);
+        var original = AppSettings.CreateDefault() with
+        {
+            Llm = new LlmConfig
+            {
+                ModelPath = "/models/llama.gguf",
+                MaxTokens = 256,
+                Temperature = 0.3f,
+                ServerPort = 9090,
+                TimeoutMs = 15_000,
+            },
+        };
+
+        await repo.SaveAsync(original, TestContext.Current.CancellationToken);
+        var (loaded, wasDefaulted) = await repo.LoadAsync(TestContext.Current.CancellationToken);
+
+        wasDefaulted.Should().BeFalse();
+        loaded.Should().Be(original);
+    }
 }

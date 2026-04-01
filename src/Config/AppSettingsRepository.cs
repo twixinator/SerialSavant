@@ -10,17 +10,12 @@ public sealed class AppSettingsRepository(
     ILogger<AppSettingsRepository> logger,
     string? configFilePath = null)
 {
-    private readonly ILogger<AppSettingsRepository> _logger = logger;
+    private readonly ILogger<AppSettingsRepository> _logger =
+        logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly string _configFilePath = configFilePath ?? ConfigPaths.ConfigFilePath;
 
     public async Task<(AppSettings Settings, bool WasDefaulted)> LoadAsync(CancellationToken ct = default)
     {
-        if (!File.Exists(_configFilePath))
-        {
-            _logger.LogInformation("Config file not found at {Path}, using defaults", _configFilePath);
-            return (AppSettings.CreateDefault(), true);
-        }
-
         try
         {
             var json = await File.ReadAllTextAsync(_configFilePath, ct).ConfigureAwait(false);
@@ -34,26 +29,47 @@ public sealed class AppSettingsRepository(
 
             return (settings, false);
         }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            _logger.LogInformation("Config file not found at {Path}, using defaults", _configFilePath);
+            return (AppSettings.CreateDefault(), true);
+        }
         catch (JsonException ex)
         {
             _logger.LogWarning(ex, "Config file at {Path} is corrupt, using defaults", _configFilePath);
             return (AppSettings.CreateDefault(), true);
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Failed to read config at {Path}", _configFilePath);
+            throw;
+        }
     }
 
     public async Task SaveAsync(AppSettings settings, CancellationToken ct = default)
     {
-        // Path.GetDirectoryName returns null only for root paths;
-        // _configFilePath always has at least one directory segment.
+        ArgumentNullException.ThrowIfNull(settings);
+
         var directory = Path.GetDirectoryName(_configFilePath)
             ?? throw new InvalidOperationException(
                 $"Cannot determine directory for config path '{_configFilePath}'.");
+
+        _logger.LogDebug("Saving config to {Path}", _configFilePath);
 
         try
         {
             Directory.CreateDirectory(directory);
             var json = JsonSerializer.Serialize(settings, AppSettingsJsonContext.Default.AppSettings);
             await File.WriteAllTextAsync(_configFilePath, json, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to serialize settings for config path {Path}", _configFilePath);
+            throw;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

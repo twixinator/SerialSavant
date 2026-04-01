@@ -41,6 +41,24 @@ public sealed class AppSettingsRepository(
         }
     }
 
-    public Task SaveAsync(AppSettings settings, CancellationToken ct = default) =>
-        throw new NotImplementedException();
+    public async Task SaveAsync(AppSettings settings, CancellationToken ct = default)
+    {
+        // Path.GetDirectoryName returns null only for root paths;
+        // _configFilePath always has at least one directory segment.
+        var directory = Path.GetDirectoryName(_configFilePath)
+            ?? throw new InvalidOperationException(
+                $"Cannot determine directory for config path '{_configFilePath}'.");
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var json = JsonSerializer.Serialize(settings, AppSettingsJsonContext.Default.AppSettings);
+            await File.WriteAllTextAsync(_configFilePath, json, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "Failed to save config to {Path}", _configFilePath);
+            throw;
+        }
+    }
 }

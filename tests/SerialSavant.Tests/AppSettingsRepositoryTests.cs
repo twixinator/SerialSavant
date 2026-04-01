@@ -129,4 +129,66 @@ public sealed class AppSettingsRepositoryTests
         await repo.Invoking(r => r.LoadAsync(cts.Token))
             .Should().ThrowAsync<OperationCanceledException>();
     }
+
+    // ── save tests ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task SaveAsync_CreatesDirectoryAndFile()
+    {
+        var path = TempConfigPath();
+        var repo = MakeRepository(path);
+        var settings = AppSettings.CreateDefault() with
+        {
+            Serial = new SerialConfig { Port = "/dev/ttyUSB1", BaudRate = 57600 },
+        };
+
+        await repo.SaveAsync(settings, TestContext.Current.CancellationToken);
+
+        File.Exists(path).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SaveAsync_OverwritesExistingFile()
+    {
+        var path = TempConfigPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, "old content");
+
+        var repo = MakeRepository(path);
+        await repo.SaveAsync(AppSettings.CreateDefault(), TestContext.Current.CancellationToken);
+
+        var content = await File.ReadAllTextAsync(path);
+        content.Should().NotBe("old content");
+        content.Should().Contain("BaudRate");
+    }
+
+    [Fact]
+    public async Task SaveAsync_RoundTrip_LoadReturnsEquivalentSettings()
+    {
+        var path = TempConfigPath();
+        var repo = MakeRepository(path);
+        var original = AppSettings.CreateDefault() with
+        {
+            Serial = new SerialConfig { Port = "/dev/ttyACM0", BaudRate = 9600 },
+            Llm = new LlmConfig { ModelPath = "/models/llama.gguf" },
+        };
+
+        await repo.SaveAsync(original, TestContext.Current.CancellationToken);
+        var (loaded, wasDefaulted) = await repo.LoadAsync(TestContext.Current.CancellationToken);
+
+        wasDefaulted.Should().BeFalse();
+        loaded.Should().Be(original);
+    }
+
+    [Fact]
+    public async Task SaveAsync_PreCancelledToken_ThrowsOperationCanceled()
+    {
+        var path = TempConfigPath();
+        var repo = MakeRepository(path);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await repo.Invoking(r => r.SaveAsync(AppSettings.CreateDefault(), cts.Token))
+            .Should().ThrowAsync<OperationCanceledException>();
+    }
 }

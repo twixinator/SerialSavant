@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Oliver Raider
+// SPDX-License-Identifier: Apache-2.0
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -201,5 +203,6 @@ public sealed class UartSerialReaderTests
         entries.Should().HaveCount(2);
         entries[0].RawLine.Should().Be("INFO: first");
         entries[1].RawLine.Should().Be("INFO: recovered");
+        failingPort.Disposed.Should().BeTrue();
     }
 }

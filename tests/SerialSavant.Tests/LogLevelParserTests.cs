@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Oliver Raider
+// SPDX-License-Identifier: Apache-2.0
 using AwesomeAssertions;
 using SerialSavant.Core;
 
@@ -29,11 +31,20 @@ public sealed class LogLevelParserTests
     }
 
     [Theory]
-    [InlineData("fatal: lowercase works")]
-    [InlineData("Error: mixed case")]
-    [InlineData("  INFO: leading whitespace")]
-    public void Given_LineWithVariantCasing_When_Parse_Then_MatchesCaseInsensitively(string rawLine)
+    [InlineData("fatal: lowercase works", SerialLogLevel.Fatal)]
+    [InlineData("Error: mixed case", SerialLogLevel.Error)]
+    [InlineData("  INFO: leading whitespace", SerialLogLevel.Info)]
+    public void Given_LineWithVariantCasing_When_Parse_Then_MatchesCaseInsensitively(
+        string rawLine, SerialLogLevel expected)
     {
-        LogLevelParser.Parse(rawLine).Should().NotBe(SerialLogLevel.Unknown);
+        LogLevelParser.Parse(rawLine).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("ERROR something without colon")]
+    [InlineData("INFO no colon here")]
+    public void Given_LineWithPrefixButNoColon_When_Parse_Then_ReturnsUnknown(string rawLine)
+    {
+        LogLevelParser.Parse(rawLine).Should().Be(SerialLogLevel.Unknown);
     }
 }

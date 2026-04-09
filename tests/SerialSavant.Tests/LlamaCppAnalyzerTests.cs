@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Oliver Raider
+// SPDX-License-Identifier: Apache-2.0
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -149,5 +151,58 @@ public sealed class LlamaCppAnalyzerTests
 
         var act = () => analyzer.AnalyzeAsync(TestEntry, cts.Token);
         await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task Given_JsonWrappedInProse_When_AnalyzeAsync_Then_ExtractsJsonCorrectly()
+    {
+        var llmOutput = """Sure! Here is my analysis: {"severity":"High","explanation":"OOM detected","suggestions":["Check heap size"]} Let me know if you need more.""";
+        var handler = CreateHandler(llmOutput);
+        var analyzer = CreateAnalyzer(handler);
+
+        var result = await analyzer.AnalyzeAsync(TestEntry, TestContext.Current.CancellationToken);
+
+        result.Severity.Should().Be(Severity.High);
+        result.Explanation.Should().Be("OOM detected");
+    }
+
+    [Theory]
+    [InlineData("banana")]
+    [InlineData("Unknown")]
+    [InlineData("")]
+    public async Task Given_InvalidSeverityString_When_AnalyzeAsync_Then_FallsBackToMedium(string severity)
+    {
+        var llmOutput = $$"""{"severity":"{{severity}}","explanation":"Something happened","suggestions":["Check it"]}""";
+        var handler = CreateHandler(llmOutput);
+        var analyzer = CreateAnalyzer(handler);
+
+        var result = await analyzer.AnalyzeAsync(TestEntry, TestContext.Current.CancellationToken);
+
+        result.Severity.Should().Be(Severity.Medium);
+        result.Explanation.Should().Be("Something happened");
+    }
+
+    [Fact]
+    public async Task Given_NullEntry_When_AnalyzeAsync_Then_ThrowsArgumentNullException()
+    {
+        var handler = CreateHandler("{}");
+        var analyzer = CreateAnalyzer(handler);
+
+        var act = () => analyzer.AnalyzeAsync(null!, TestContext.Current.CancellationToken);
+        await act.Should().ThrowAsync<ArgumentNullException>();
+    }
+
+    [Fact]
+    public async Task Given_EmptyExplanationAndSuggestions_When_AnalyzeAsync_Then_FallsBackToDefaults()
+    {
+        var llmOutput = """{"severity":"High","explanation":"","suggestions":[]}""";
+        var handler = CreateHandler(llmOutput);
+        var analyzer = CreateAnalyzer(handler);
+
+        var result = await analyzer.AnalyzeAsync(TestEntry, TestContext.Current.CancellationToken);
+
+        result.Severity.Should().Be(Severity.High);
+        result.Explanation.Should().NotBeNullOrWhiteSpace();
+        result.Suggestions.Should().NotBeEmpty();
     }
 }

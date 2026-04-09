@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Oliver Raider
+// SPDX-License-Identifier: Apache-2.0
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -54,5 +56,19 @@ public sealed class LlamaServerProcessTests
 
         var act = () => process.WaitForReadyAsync(cts.Token);
         await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task Given_NotYetReady_When_WaitForReadyAsyncThenReady_Then_CompletesSuccessfully()
+    {
+        var process = new LlamaServerProcess(
+            CreateOptions(), NullLogger<LlamaServerProcess>.Instance);
+
+        var waitTask = process.WaitForReadyAsync(CancellationToken.None);
+        waitTask.IsCompleted.Should().BeFalse();
+
+        process.SimulateReady();
+
+        await waitTask; // should complete without throwing
     }
 }

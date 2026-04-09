@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Oliver Raider
+// SPDX-License-Identifier: Apache-2.0
+
 using System.Diagnostics;
 using System.Net.Http;
 using Microsoft.Extensions.Hosting;
@@ -13,7 +16,7 @@ public sealed class LlamaServerProcess : BackgroundService, ILlamaServerGate
     private readonly ILogger<LlamaServerProcess> _logger;
     private readonly TaskCompletionSource _readyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private volatile bool _crashed;
-    private Process? _process;
+    private volatile Process? _process;
 
     public LlamaServerProcess(
         IOptions<LlmConfig> options,
@@ -23,14 +26,12 @@ public sealed class LlamaServerProcess : BackgroundService, ILlamaServerGate
         _logger = logger;
     }
 
-    public Task WaitForReadyAsync(CancellationToken cancellationToken)
+    public async Task WaitForReadyAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        await _readyTcs.Task.WaitAsync(cancellationToken);
         if (_crashed)
             throw new InvalidOperationException("llama-server process has exited unexpectedly.");
-
-        cancellationToken.ThrowIfCancellationRequested();
-
-        return _readyTcs.Task.WaitAsync(cancellationToken);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -69,6 +70,11 @@ public sealed class LlamaServerProcess : BackgroundService, ILlamaServerGate
         {
             _readyTcs.TrySetException(ex);
             _logger.LogError(ex, "llama-server failed to start");
+            if (_process is { HasExited: false } proc)
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+            }
+            _process?.Dispose();
         }
     }
 
@@ -100,9 +106,8 @@ public sealed class LlamaServerProcess : BackgroundService, ILlamaServerGate
         using var handler = new HttpClientHandler();
         using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(2) };
         var healthUrl = $"http://127.0.0.1:{_config.ServerPort}/health";
-        var deadline = DateTime.UtcNow.AddMilliseconds(_config.TimeoutMs);
-
-        while (DateTime.UtcNow < deadline)
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.ElapsedMilliseconds < _config.TimeoutMs)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -112,9 +117,9 @@ public sealed class LlamaServerProcess : BackgroundService, ILlamaServerGate
                 if (response.IsSuccessStatusCode)
                     return;
             }
-            catch (HttpRequestException)
+            catch (HttpRequestException ex)
             {
-                // Server not ready yet
+                _logger.LogDebug("Health check not ready: {Message}", ex.Message);
             }
 
             await Task.Delay(100, cancellationToken).ConfigureAwait(false);
@@ -147,7 +152,7 @@ public sealed class LlamaServerProcess : BackgroundService, ILlamaServerGate
                 using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 await proc.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is InvalidOperationException or OperationCanceledException)
+            catch (Exception ex) when (ex is InvalidOperationException or OperationCanceledException or System.ComponentModel.Win32Exception)
             {
                 _logger.LogWarning(ex, "Error while stopping llama-server");
             }

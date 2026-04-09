@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Oliver Raider
+// SPDX-License-Identifier: Apache-2.0
+
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using SerialSavant.Config;
@@ -51,8 +54,8 @@ public sealed class UartSerialReader(
             if (attempt > 0)
             {
                 var shift = Math.Min(attempt, 30);
-                var delayMs = Math.Min(
-                    config.ReconnectBaseDelayMs * (1 << shift),
+                var delayMs = (int)Math.Min(
+                    (long)config.ReconnectBaseDelayMs * (1L << shift),
                     config.ReconnectMaxDelayMs);
 
                 logger.LogInformation(
@@ -62,9 +65,9 @@ public sealed class UartSerialReader(
                 await Task.Delay(delayMs, cancellationToken).ConfigureAwait(false);
             }
 
+            var port = factory.Create(config.Port, config.BaudRate);
             try
             {
-                var port = factory.Create(config.Port, config.BaudRate);
                 port.Open();
 
                 logger.LogInformation("Connected to {Port} at {BaudRate} baud",
@@ -74,6 +77,7 @@ public sealed class UartSerialReader(
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
+                port.Dispose();
                 logger.LogWarning(ex,
                     "Failed to open {Port}, attempt {Attempt}/{Max}",
                     config.Port, attempt + 1, config.ReconnectMaxAttempts);

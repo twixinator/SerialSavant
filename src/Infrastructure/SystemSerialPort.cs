@@ -1,5 +1,9 @@
+// SPDX-FileCopyrightText: 2026 Oliver Raider
+// SPDX-License-Identifier: Apache-2.0
+
 using System.IO.Ports;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace SerialSavant.Infrastructure;
 
@@ -11,12 +15,14 @@ namespace SerialSavant.Infrastructure;
 public sealed class SystemSerialPort : ISerialPort
 {
     private readonly SerialPort _port;
+    private readonly ILogger<SystemSerialPort> _logger;
     private readonly byte[] _readBuffer = new byte[1024];
     private readonly StringBuilder _lineBuffer = new();
     private bool _disposed;
 
-    public SystemSerialPort(string portName, int baudRate)
+    public SystemSerialPort(string portName, int baudRate, ILogger<SystemSerialPort> logger)
     {
+        _logger = logger;
         _port = new SerialPort(portName, baudRate)
         {
             ReadTimeout = SerialPort.InfiniteTimeout,
@@ -26,10 +32,16 @@ public sealed class SystemSerialPort : ISerialPort
 
     public bool IsOpen => !_disposed && _port.IsOpen;
 
-    public void Open() => _port.Open();
+    public void Open()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _port.Open();
+    }
 
     public async Task<string?> ReadLineAsync(CancellationToken cancellationToken)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -64,7 +76,10 @@ public sealed class SystemSerialPort : ISerialPort
         if (_port.IsOpen)
         {
             try { _port.Close(); }
-            catch (IOException) { }
+            catch (IOException ex)
+            {
+                _logger.LogDebug(ex, "IOException during serial port close on {PortName}", _port.PortName);
+            }
         }
 
         _port.Dispose();

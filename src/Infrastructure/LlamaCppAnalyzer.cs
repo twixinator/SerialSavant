@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Oliver Raider
+// SPDX-License-Identifier: Apache-2.0
+
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -45,17 +48,19 @@ public sealed class LlamaCppAnalyzer(
             "/v1/chat/completions", content, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
-        var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         var chatResponse = await JsonSerializer.DeserializeAsync(
             responseStream, LlamaCppJsonContext.Default.ChatCompletionResponse,
             cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Empty response from llama-server.");
 
+        if (chatResponse.Choices is not { Count: > 0 })
+            throw new InvalidOperationException("llama-server returned no choices in the response.");
         var assistantContent = chatResponse.Choices[0].Message.Content;
         return ParseClassification(assistantContent);
     }
 
-    private static AnalysisResult ParseClassification(string content)
+    private AnalysisResult ParseClassification(string content)
     {
         try
         {
@@ -63,14 +68,20 @@ public sealed class LlamaCppAnalyzer(
             var jsonEnd = content.LastIndexOf('}');
 
             if (jsonStart < 0 || jsonEnd <= jsonStart)
+            {
+                logger.LogWarning("LLM response contained no JSON object, using fallback. Raw content: {Content}", content);
                 return CreateFallback(content);
+            }
 
             var jsonSpan = content[jsonStart..(jsonEnd + 1)];
             var classification = JsonSerializer.Deserialize(
                 jsonSpan, LlamaCppJsonContext.Default.LlmClassification);
 
             if (classification is null)
+            {
+                logger.LogWarning("LLM JSON deserialized to null, using fallback. Raw content: {Content}", content);
                 return CreateFallback(content);
+            }
 
             var severity = Enum.TryParse<Severity>(classification.Severity, ignoreCase: true, out var parsed)
                 ? parsed
@@ -91,8 +102,9 @@ public sealed class LlamaCppAnalyzer(
 
             return AnalysisResult.Create(explanation, severity, suggestions);
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
+            logger.LogWarning(ex, "Failed to parse LLM classification, using fallback. Raw content: {Content}", content);
             return CreateFallback(content);
         }
     }

@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Oliver Raider
+// SPDX-License-Identifier: Apache-2.0
 using System.Text.Json;
 using AwesomeAssertions;
 using SerialSavant.Infrastructure;
@@ -74,5 +76,28 @@ public sealed class LlamaCppJsonTests
         result!.Severity.Should().Be("High");
         result.Explanation.Should().Be("POSIX error detected");
         result.Suggestions.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void Given_ResponseWithNullId_When_Serialized_Then_OmitsNullProperties()
+    {
+        var response = new ChatCompletionResponse
+        {
+            Id = null,
+            Choices =
+            [
+                new ChatChoice
+                {
+                    Index = 0,
+                    Message = new ChatMessage { Role = "assistant", Content = "test" },
+                    FinishReason = null
+                }
+            ]
+        };
+
+        var json = JsonSerializer.Serialize(response, LlamaCppJsonContext.Default.ChatCompletionResponse);
+
+        json.Should().NotContain("\"id\"");
+        json.Should().NotContain("\"finish_reason\"");
     }
 }

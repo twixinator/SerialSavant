@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Oliver Raider
+// SPDX-License-Identifier: Apache-2.0
+
 namespace SerialSavant.Core;
 
 /// <summary>
@@ -17,6 +20,7 @@ public static class LogLevelParser
 
     public static SerialLogLevel Parse(string rawLine)
     {
+        ArgumentNullException.ThrowIfNull(rawLine);
         var trimmed = rawLine.AsSpan().TrimStart();
 
         foreach (var (prefix, level) in Prefixes)

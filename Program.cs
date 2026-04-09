@@ -85,17 +85,44 @@ builder.Services.AddSingleton<IValidateOptions<SerialConfig>, SerialConfigValida
 builder.Services.AddSingleton<IValidateOptions<LlmConfig>, LlmConfigValidator>();
 
 // DI registrations.
-builder.Services.AddSingleton(new MockOptions { Mode = isMockFlagSet ? MockMode.Random : MockMode.Deterministic });
 builder.Services.AddSingleton<ILogRenderer, AnsiConsoleRenderer>();
-builder.Services.AddSingleton<ILlmAnalyzer, MockLlmAnalyzer>();
 
-builder.Services.AddSingleton<ISerialReader>(sp =>
+if (isMockFlagSet)
 {
-    var opts = sp.GetRequiredService<MockOptions>();
-    var log = sp.GetRequiredService<ILogger<MockSerialReader>>();
-    const int MOCK_ENTRY_DELAY_MS = 100;
-    return new MockSerialReader(opts.Mode, delay: TimeSpan.FromMilliseconds(MOCK_ENTRY_DELAY_MS), logger: log);
-});
+    builder.Services.AddSingleton(new MockOptions { Mode = MockMode.Random });
+    builder.Services.AddSingleton<ILlmAnalyzer, MockLlmAnalyzer>();
+    builder.Services.AddSingleton<ISerialReader>(sp =>
+    {
+        var opts = sp.GetRequiredService<MockOptions>();
+        var log = sp.GetRequiredService<ILogger<MockSerialReader>>();
+        const int MOCK_ENTRY_DELAY_MS = 100;
+        return new MockSerialReader(opts.Mode, delay: TimeSpan.FromMilliseconds(MOCK_ENTRY_DELAY_MS), logger: log);
+    });
+}
+else
+{
+    // Serial reader (issue #4)
+    builder.Services.AddSingleton<ISerialPortFactory, SystemSerialPortFactory>();
+    builder.Services.AddSingleton<ISerialReader>(sp =>
+    {
+        var factory = sp.GetRequiredService<ISerialPortFactory>();
+        var serialConfig = sp.GetRequiredService<IOptions<SerialConfig>>().Value;
+        var log = sp.GetRequiredService<ILogger<UartSerialReader>>();
+        return new UartSerialReader(factory, serialConfig, log);
+    });
+
+    // LLM analyzer (issue #5)
+    builder.Services.AddSingleton<LlamaServerProcess>();
+    builder.Services.AddSingleton<ILlamaServerGate>(sp => sp.GetRequiredService<LlamaServerProcess>());
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<LlamaServerProcess>());
+    builder.Services.AddHttpClient("llama", (sp, client) =>
+    {
+        var llmOpts = sp.GetRequiredService<IOptions<LlmConfig>>().Value;
+        client.BaseAddress = new Uri($"http://127.0.0.1:{llmOpts.ServerPort}");
+        client.Timeout = TimeSpan.FromMilliseconds(llmOpts.TimeoutMs);
+    });
+    builder.Services.AddSingleton<ILlmAnalyzer, LlamaCppAnalyzer>();
+}
 
 builder.Services.AddHostedService<ConsoleOrchestrator>();
 

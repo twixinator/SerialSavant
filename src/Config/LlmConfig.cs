@@ -10,4 +10,5 @@ public sealed record LlmConfig
     public float Temperature { get; init; } = 0.7f;
     public int ServerPort { get; init; } = 8080;
     public int TimeoutMs { get; init; } = 30_000;
+    public string ServerPath { get; init; } = "llama-server";
 }
